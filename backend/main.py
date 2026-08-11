@@ -95,7 +95,7 @@ def load_models():
             print("Loading Whisper model from Hugging Face...")
             transcriber = pipeline(
                 "automatic-speech-recognition",
-                model="openai/whisper-large-v3-turbo",
+                model="openai/whisper-small",
                 device="cpu"
             )
             print("Loading Wav2Vec2 emotion classifier model...")
@@ -401,13 +401,11 @@ async def predict_audio(
             
         if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
-            final_stress = int(stress_score)
         elif tired_score > calm_score:
             mood = "tired"
-            final_stress = int(tired_score)
         else:
             mood = "calm"
-            final_stress = int(stress_score)
+        final_stress = int(stress_score)
             
         final_stress = max(5, min(99, final_stress))
         
@@ -513,13 +511,11 @@ async def predict_preset(
             
         if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
-            final_stress = int(stress_score)
         elif tired_score > calm_score:
             mood = "tired"
-            final_stress = int(tired_score)
         else:
             mood = "calm"
-            final_stress = int(stress_score)
+        final_stress = int(stress_score)
             
         final_stress = max(5, min(99, final_stress))
         
