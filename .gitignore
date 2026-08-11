@@ -1,4 +1,14 @@
-# Python
+# Next.js / Vercel v0 ignores
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+node_modules/
+.next/
+
+# Python / Backend ignores
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,8 +19,7 @@ env/
 .env
 
 # Database & Local Logs
-# We ignore local session db but allow configurations/guides
-session_db.json
+backend/session_db.json
 *.log
 
 # OS-specific
