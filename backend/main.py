@@ -95,7 +95,7 @@ def load_models():
             print("Loading Whisper model from Hugging Face...")
             transcriber = pipeline(
                 "automatic-speech-recognition",
-                model="openai/whisper-small",
+                model="openai/whisper-large-v3-turbo",
                 device="cpu"
             )
             print("Loading Wav2Vec2 emotion classifier model...")
