@@ -389,11 +389,17 @@ async def predict_audio(
         tired_prob = scores.get("sad", 0.0)
         calm_prob = scores.get("neu", 0.0) + scores.get("neutral", 0.0) + scores.get("hap", 0.0) + scores.get("happy", 0.0)
         
-        total = stress_prob + tired_prob + calm_prob
+        # Calibrate raw probabilities for human speech range
+        # Square root scaling expands the dynamic range of lower values, making the gauge highly responsive
+        cal_stress = math.sqrt(stress_prob) * 100
+        cal_tired = math.sqrt(tired_prob) * 100
+        cal_calm = calm_prob * 100
+
+        total = cal_stress + cal_tired + cal_calm
         if total > 0:
-            stress_score = (stress_prob / total) * 100
-            tired_score = (tired_prob / total) * 100
-            calm_score = (calm_prob / total) * 100
+            stress_score = (cal_stress / total) * 100
+            tired_score = (cal_tired / total) * 100
+            calm_score = (cal_calm / total) * 100
         else:
             stress_score = 0.0
             tired_score = 0.0
@@ -507,11 +513,17 @@ async def predict_preset(
         tired_prob = scores.get("sad", 0.0)
         calm_prob = scores.get("neu", 0.0) + scores.get("neutral", 0.0) + scores.get("hap", 0.0) + scores.get("happy", 0.0)
         
-        total = stress_prob + tired_prob + calm_prob
+        # Calibrate raw probabilities for human speech range
+        # Square root scaling expands the dynamic range of lower values, making the gauge highly responsive
+        cal_stress = math.sqrt(stress_prob) * 100
+        cal_tired = math.sqrt(tired_prob) * 100
+        cal_calm = calm_prob * 100
+
+        total = cal_stress + cal_tired + cal_calm
         if total > 0:
-            stress_score = (stress_prob / total) * 100
-            tired_score = (tired_prob / total) * 100
-            calm_score = (calm_prob / total) * 100
+            stress_score = (cal_stress / total) * 100
+            tired_score = (cal_tired / total) * 100
+            calm_score = (cal_calm / total) * 100
         else:
             stress_score = 0.0
             tired_score = 0.0
