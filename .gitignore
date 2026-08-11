@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Database & Local Logs
+# We ignore local session db but allow configurations/guides
+session_db.json
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
