@@ -75,8 +75,6 @@ export default function Page() {
         const formData = new FormData()
         if (uploadedFile) {
           formData.append("file", uploadedFile)
-        } else if (clip.audioBlob) {
-          formData.append("file", clip.audioBlob, "recording.wav")
         }
         
         const parsedSeconds = parseTimeToSeconds(customLapTimeStr) || 82.4

@@ -39,7 +39,7 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Select value={driver} onValueChange={setDriver}>
+          <Select value={driver} onValueChange={(val) => { if (val) setDriver(val) }}>
             <SelectTrigger className="w-[168px] font-mono text-sm">
               <SelectValue placeholder="Driver" />
             </SelectTrigger>
@@ -52,7 +52,7 @@ export function TopNav() {
             </SelectContent>
           </Select>
 
-          <Select value={session} onValueChange={setSession}>
+          <Select value={session} onValueChange={(val) => { if (val) setSession(val) }}>
             <SelectTrigger className="w-[128px] font-mono text-sm">
               <SelectValue placeholder="Session" />
             </SelectTrigger>
