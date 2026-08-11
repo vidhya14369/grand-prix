@@ -80,6 +80,26 @@ export default function Page() {
         
         if (!res.ok) throw new Error("Backend failed processing file")
         resultData = await res.json()
+
+        // Explicitly save the custom lap to the backend session log database
+        try {
+          await fetch("http://localhost:8000/api/session/add", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              lap: resultData.lap,
+              lapTime: resultData.lapTime,
+              mood: resultData.mood,
+              stress: resultData.stress,
+              transcript: resultData.transcript,
+              speaker: resultData.speaker || "Driver Radio"
+            })
+          })
+        } catch (saveErr) {
+          console.warn("Manual save call to /api/session/add failed:", saveErr)
+        }
       } else {
         // Preset file execution (passes IDs only to trigger local backend file processing)
         const formData = new FormData()
