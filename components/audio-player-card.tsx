@@ -41,6 +41,7 @@ export function AudioPlayerCard({
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0) // seconds
   const inputRef = useRef<HTMLInputElement>(null)
+  const [mounted, setMounted] = useState(false)
 
   /* ── Member 4: Microphone recording state ── */
   const [isRecording, setIsRecording] = useState(false)
@@ -81,8 +82,9 @@ export function AudioPlayerCard({
     return () => window.clearInterval(id)
   }, [playing, duration])
 
-  /* ── Member 4: Cleanup recording on unmount ── */
+  /* ── Member 4: Cleanup recording on unmount & handle mount state ── */
   useEffect(() => {
+    setMounted(true)
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop()
@@ -368,12 +370,12 @@ export function AudioPlayerCard({
           </div>
 
           <div className="flex h-20 items-center gap-[3px]" aria-hidden="true">
-            {bars.map((h, i) => (
+            {mounted ? bars.map((h, i) => (
               <div
                 key={i}
                 className="flex-1 rounded-full transition-colors"
                 style={{
-                  height: `${Math.max(8, h * 100)}%`,
+                  height: `${Math.round(Math.max(8, h * 100))}%`,
                   backgroundColor:
                     i <= activeBar && playing
                       ? "var(--primary)"
@@ -382,7 +384,11 @@ export function AudioPlayerCard({
                         : "var(--muted)",
                 }}
               />
-            ))}
+            )) : (
+              <div className="flex w-full items-center justify-center font-mono text-xs text-muted-foreground animate-pulse">
+                INITIALIZING TELEMETRY RECEIVER...
+              </div>
+            )}
           </div>
 
           <div className="mt-3 flex items-center gap-3">
