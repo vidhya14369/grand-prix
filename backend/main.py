@@ -364,8 +364,8 @@ async def predict_audio(
             if os.path.exists(temp_path):
                 os.remove(temp_path)
                 
-        # Run Whisper ASR
-        transcription_result = transcriber(y)
+        # Run Whisper ASR (force English transcription task to prevent language mis-detection)
+        transcription_result = transcriber(y, generate_kwargs={"language": "english", "task": "transcribe"})
         transcript = transcription_result.get("text", "").strip()
         
         # Run Wav2Vec2 SER
@@ -463,8 +463,8 @@ async def predict_preset(
         # Load and preprocess audio
         y, sr = librosa.load(preset_path, sr=16000)
         
-        # Run Whisper ASR
-        transcription_result = transcriber(y)
+        # Run Whisper ASR (force English transcription task to prevent language mis-detection)
+        transcription_result = transcriber(y, generate_kwargs={"language": "english", "task": "transcribe"})
         transcript = transcription_result.get("text", "").strip()
         
         # Run Wav2Vec2 SER
