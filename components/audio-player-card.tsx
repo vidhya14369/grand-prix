@@ -30,16 +30,40 @@ export function AudioPlayerCard({
   onSelectClip,
   onAnalyze,
   analyzing,
+  nextLap,
 }: {
   clip: RadioClip
   onSelectClip: (clip: RadioClip, file?: File) => void
-  onAnalyze: () => void
+  onAnalyze: (customLap: number, customLapTimeStr: string) => void
   analyzing: boolean
+  nextLap: number
 }) {
   const [tab, setTab] = useState<Tab>("preset")
   const [dragActive, setDragActive] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0) // seconds
+
+  const [inputLap, setInputLap] = useState<number>(nextLap)
+  const [inputLapTime, setInputLapTime] = useState<string>("1:22.400")
+  const [valError, setValError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setInputLap(nextLap)
+  }, [nextLap])
+
+  function handleAnalyzeClick() {
+    if (tab === "preset") {
+      onAnalyze(clip.lap, "")
+    } else {
+      const parsed = parseLapTimeToSeconds(inputLapTime)
+      if (parsed === null) {
+        setValError("⚠️ Invalid lap time format. Enter e.g. 1:22.400 or seconds like 82.4.")
+        return
+      }
+      setValError(null)
+      onAnalyze(inputLap, inputLapTime)
+    }
+  }
   const inputRef = useRef<HTMLInputElement>(null)
   const [mounted, setMounted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -407,6 +431,47 @@ export function AudioPlayerCard({
           </div>
         )}
 
+        {/* Telemetry Settings (only for upload/record custom clips) */}
+        {tab !== "preset" && (
+          <div className="rounded-lg border border-border bg-background/40 p-4 space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-primary">
+              Telemetry Settings
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Target Lap</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={inputLap}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10)
+                    setInputLap(isNaN(v) ? 1 : v)
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Lap Time</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1:22.400"
+                  value={inputLapTime}
+                  onChange={(e) => {
+                    setInputLapTime(e.target.value)
+                    setValError(null)
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            {valError && (
+              <p className="font-mono text-[10px] text-destructive leading-normal mt-1">{valError}</p>
+            )}
+          </div>
+        )}
+
         {/* Waveform + transport (shared across tabs) */}
         <div className="rounded-lg border border-border bg-background/60 p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -475,7 +540,7 @@ export function AudioPlayerCard({
           </div>
         </div>
 
-        <Button className="w-full font-medium" onClick={onAnalyze} disabled={analyzing}>
+        <Button className="w-full font-medium" onClick={handleAnalyzeClick} disabled={analyzing}>
           {analyzing ? (
             <>
               <Loader2 className="size-4 animate-spin" />
@@ -570,4 +635,26 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
   }
 
   return buffer
+}
+
+function parseLapTimeToSeconds(str: string): number | null {
+  const trimmed = str.trim()
+  if (!trimmed) return null
+  
+  const timeReg = /^(\d+):([0-5]?\d)(?:\.(\d+))?$/
+  const match = trimmed.match(timeReg)
+  if (match) {
+    const mins = parseInt(match[1], 10)
+    const secs = parseInt(match[2], 10)
+    const msStr = match[3] || "0"
+    const ms = parseFloat(`0.${msStr}`)
+    return mins * 60 + secs + ms
+  }
+  
+  const plainNum = parseFloat(trimmed)
+  if (!isNaN(plainNum) && plainNum > 0 && isFinite(plainNum)) {
+    return plainNum
+  }
+  
+  return null
 }

@@ -19,6 +19,7 @@ export default function Page() {
   const [uploadedFile, setUploadedFile] = useState<File | undefined>(undefined)
   const [sessionLaps, setSessionLaps] = useState<LapData[]>([])
   const [insights, setInsights] = useState<string>("Analyzing stint pace... Run AI analysis on the driver's radio to compute performance delta.")
+  const [isFallbackMode, setIsFallbackMode] = useState<boolean>(false)
 
   // Sync data on page load
   useEffect(() => {
@@ -31,17 +32,23 @@ export default function Page() {
       if (res.ok) {
         const data = await res.json()
         setSessionLaps(data)
+        setIsFallbackMode(false)
       } else {
         throw new Error("API error")
       }
 
-      const insightsRes = await fetch("http://localhost:8000/api/session/insights")
-      if (insightsRes.ok) {
-        const insightsData = await insightsRes.json()
-        setInsights(insightsData.advisory_message)
+      try {
+        const insightsRes = await fetch("http://localhost:8000/api/session/insights")
+        if (insightsRes.ok) {
+          const insightsData = await insightsRes.json()
+          setInsights(insightsData.advisory_message)
+        }
+      } catch (insightsErr) {
+        console.warn("Insights endpoint failed, keeping AI status active:", insightsErr)
       }
     } catch (e) {
       console.warn("FastAPI backend offline, loading local static telemetry mock data...")
+      setIsFallbackMode(true)
       const { lapData } = await import("@/lib/telemetry-data")
       setSessionLaps(lapData)
       setInsights("Driver vocal stress exceeded 70% during Lap 9. Coincided with a +2.1s pace drop. Recommend tire change (Slicks to Intermediates).")
@@ -54,7 +61,7 @@ export default function Page() {
     setAnalyzed(false) // Wait for user to trigger explicit analysis
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze(customLapNum: number, customLapTimeStr: string) {
     setAnalyzing(true)
     
     // Determine if it's a custom upload or preset
@@ -63,15 +70,18 @@ export default function Page() {
     try {
       let resultData;
       
-      if (isCustom && uploadedFile) {
+      if (isCustom) {
         // Prepare multipart form data for file upload
         const formData = new FormData()
-        formData.append("file", uploadedFile)
-        // Automatically assign next lap number and mock lap time for simulation consistency
-        const nextLapNum = sessionLaps.length > 0 ? Math.max(...sessionLaps.map(l => l.lap)) + 1 : 1
-        const mockLapTime = 81.2 + Math.random() * 2.5
-        formData.append("lap", nextLapNum.toString())
-        formData.append("lapTime", mockLapTime.toString())
+        if (uploadedFile) {
+          formData.append("file", uploadedFile)
+        } else if (clip.audioBlob) {
+          formData.append("file", clip.audioBlob, "recording.wav")
+        }
+        
+        const parsedSeconds = parseTimeToSeconds(customLapTimeStr) || 82.4
+        formData.append("lap", customLapNum.toString())
+        formData.append("lapTime", parsedSeconds.toString())
         
         const res = await fetch("http://localhost:8000/api/predict", {
           method: "POST",
@@ -80,6 +90,7 @@ export default function Page() {
         
         if (!res.ok) throw new Error("Backend failed processing file")
         resultData = await res.json()
+        setIsFallbackMode(false)
 
         // Explicitly save the custom lap to the backend session log database
         try {
@@ -120,6 +131,7 @@ export default function Page() {
         
         if (!res.ok) throw new Error("Backend failed processing preset")
         resultData = await res.json()
+        setIsFallbackMode(false)
       }
       
       // Update clip UI view
@@ -137,26 +149,29 @@ export default function Page() {
       
     } catch (err) {
       console.error("Inference fetch failed, executing local mock timeout:", err)
+      setIsFallbackMode(true)
       // Local Mock fallback in case backend is offline
       await new Promise(resolve => setTimeout(resolve, 1200))
       
+      const parsedSeconds = parseTimeToSeconds(customLapTimeStr) || 82.4
+      
       // Fallback update
-      setClip({
+      const updatedClip = {
         ...clip,
         transcript: clip.transcript || "Copy that, tyres feel completely gone. I am losing the rear.",
         mood: clip.mood || "stressed",
-        stress: clip.stress || 84
-      })
+        stress: clip.stress || 84,
+        lap: isCustom ? customLapNum : clip.lap
+      }
+      setClip(updatedClip)
 
-      /* ── Member 4: Update local chart data even when backend is offline ── */
+      /* ── Update local chart data even when backend is offline ── */
       if (isCustom) {
-        const nextLapNum = sessionLaps.length > 0 ? Math.max(...sessionLaps.map(l => l.lap)) + 1 : 1
-        const mockLapTime = 81.2 + Math.random() * 2.5
         const fallbackLap: LapData = {
-          lap: nextLapNum,
-          lapTime: +mockLapTime.toFixed(3),
-          mood: clip.mood || "stressed",
-          stress: clip.stress || 84,
+          lap: customLapNum,
+          lapTime: parsedSeconds,
+          mood: updatedClip.mood,
+          stress: updatedClip.stress,
         }
         setSessionLaps(prev => [...prev, fallbackLap].sort((a, b) => a.lap - b.lap))
       }
@@ -181,10 +196,17 @@ export default function Page() {
               Radio &amp; Stress Analytics
             </h2>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 font-mono text-[10px] uppercase text-primary">
-            <Cpu className="size-3.5 animate-pulse" />
-            AI Pit Wall Online
-          </div>
+          {isFallbackMode ? (
+            <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 font-mono text-[10px] uppercase text-amber-400">
+              <Cpu className="size-3.5 animate-pulse" />
+              Demo Mode (AI Offline Fallback)
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-mono text-[10px] uppercase text-primary">
+              <Cpu className="size-3.5 animate-pulse" />
+              Real-Time AI Telemetry Online
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -195,6 +217,7 @@ export default function Page() {
               onSelectClip={handleSelectClip}
               onAnalyze={handleAnalyze}
               analyzing={analyzing}
+              nextLap={sessionLaps.length > 0 ? Math.max(...sessionLaps.map(l => l.lap)) + 1 : 1}
             />
             <MoodBadgeCard
               mood={analyzed ? clip.mood : "calm"}
@@ -210,7 +233,7 @@ export default function Page() {
 
           {/* RIGHT — Lap Performance & Correlation */}
           <section className="flex flex-col gap-5" aria-label="Lap performance and correlation">
-            <MetricsOverview />
+            <MetricsOverview laps={sessionLaps} />
             <LapStressChart data={sessionLaps} />
             
             {/* AI Strategic Advisory Card */}
@@ -268,4 +291,26 @@ export default function Page() {
       </main>
     </div>
   )
+}
+
+function parseTimeToSeconds(str: string): number | null {
+  const trimmed = str.trim()
+  if (!trimmed) return null
+  
+  const timeReg = /^(\d+):([0-5]?\d)(?:\.(\d+))?$/
+  const match = trimmed.match(timeReg)
+  if (match) {
+    const mins = parseInt(match[1], 10)
+    const secs = parseInt(match[2], 10)
+    const msStr = match[3] || "0"
+    const ms = parseFloat(`0.${msStr}`)
+    return mins * 60 + secs + ms
+  }
+  
+  const plainNum = parseFloat(trimmed)
+  if (!isNaN(plainNum) && plainNum > 0 && isFinite(plainNum)) {
+    return plainNum
+  }
+  
+  return null
 }

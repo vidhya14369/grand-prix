@@ -1,5 +1,6 @@
-import { Clock, Gauge, TrendingUp, MapPin } from "lucide-react"
+import { Clock, Gauge, TrendingUp, Trophy } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatLapTime, type LapData } from "@/lib/telemetry-data"
 
 type Kpi = {
   icon: React.ElementType
@@ -9,20 +10,73 @@ type Kpi = {
   tone?: "up" | "down" | "neutral"
 }
 
-const kpis: Kpi[] = [
-  { icon: Clock, label: "Last Lap Time", value: "1:23.441", sub: "Lap 9 of 14", tone: "neutral" },
-  { icon: TrendingUp, label: "Pace Delta", value: "+0.421s", sub: "vs. session best", tone: "down" },
-  { icon: Gauge, label: "Stress Index", value: "84", sub: "High · rising", tone: "down" },
-  { icon: MapPin, label: "Track Position", value: "P4", sub: "+1 since Lap 6", tone: "up" },
-]
-
 const toneColor = {
   up: "var(--calm)",
   down: "var(--stressed)",
   neutral: "var(--muted-foreground)",
 } as const
 
-export function MetricsOverview() {
+export function MetricsOverview({ laps }: { laps: LapData[] }) {
+  const latestLap = laps.length > 0 ? laps[laps.length - 1] : null
+  const bestLap = laps.length > 0 
+    ? laps.reduce((prev, curr) => (prev.lapTime < curr.lapTime ? prev : curr), laps[0]) 
+    : null
+
+  // 1. Last Lap Time
+  const lastLapValue = latestLap ? formatLapTime(latestLap.lapTime) : "—"
+  const lastLapSub = latestLap ? `Lap ${latestLap.lap} of ${laps.length}` : "No stints logged"
+
+  // 2. Pace Delta
+  let deltaValue = "0.000s"
+  let deltaSub = "Baseline set"
+  let deltaTone: "up" | "down" | "neutral" = "neutral"
+
+  if (laps.length > 1 && latestLap && bestLap) {
+    const delta = latestLap.lapTime - bestLap.lapTime
+    if (latestLap.lap === bestLap.lap) {
+      deltaValue = "0.000s"
+      deltaSub = "Stint Best pace"
+      deltaTone = "up"
+    } else if (delta > 0) {
+      deltaValue = `+${delta.toFixed(3)}s`
+      deltaSub = `vs. stint best (L${bestLap.lap})`
+      deltaTone = "down"
+    } else {
+      deltaValue = `${delta.toFixed(3)}s`
+      deltaSub = "New stint best!"
+      deltaTone = "up"
+    }
+  }
+
+  // 3. Stress Index
+  const stressValue = latestLap ? `${latestLap.stress}%` : "—"
+  let stressSub = "No telemetry"
+  let stressTone: "up" | "down" | "neutral" = "neutral"
+
+  if (latestLap) {
+    if (latestLap.stress > 60) {
+      stressSub = "High · rising"
+      stressTone = "down"
+    } else if (latestLap.stress > 30) {
+      stressSub = "Elevated · alert"
+      stressTone = "neutral"
+    } else {
+      stressSub = "Low · stable"
+      stressTone = "up"
+    }
+  }
+
+  // 4. Stint Best
+  const bestValue = bestLap ? formatLapTime(bestLap.lapTime) : "—"
+  const bestSub = bestLap ? `Set on Lap ${bestLap.lap}` : "No stints logged"
+
+  const kpis: Kpi[] = [
+    { icon: Clock, label: "Last Lap Time", value: lastLapValue, sub: lastLapSub, tone: "neutral" },
+    { icon: TrendingUp, label: "Pace Delta", value: deltaValue, sub: deltaSub, tone: deltaTone },
+    { icon: Gauge, label: "Stress Index", value: stressValue, sub: stressSub, tone: stressTone },
+    { icon: Trophy, label: "Stint Best", value: bestValue, sub: bestSub, tone: "up" },
+  ]
+
   return (
     <Card>
       <CardHeader>
