@@ -399,6 +399,14 @@ async def predict_audio(
             tired_score = 0.0
             calm_score = 100.0
             
+        # Hybrid NLP-Acoustic Boost: If the transcribed text contains stressed racing words,
+        # boost the stress score dynamically to align with the driver's semantic state.
+        stress_keywords = ["lose", "losing", "grip", "gone", "slide", "sliding", "struggle", "struggling", "traffic", "no power", "cannot", "can't", "heavy", "bad", "problem", "tyre", "tire", "fail"]
+        transcript_lower = transcript.lower()
+        if any(kw in transcript_lower for kw in stress_keywords):
+            stress_score = min(95.0, stress_score + 40.0)
+            tired_score = max(0.0, tired_score - 20.0)
+
         if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
         elif tired_score > calm_score:
@@ -509,6 +517,14 @@ async def predict_preset(
             tired_score = 0.0
             calm_score = 100.0
             
+        # Hybrid NLP-Acoustic Boost: If the transcribed text contains stressed racing words,
+        # boost the stress score dynamically to align with the driver's semantic state.
+        stress_keywords = ["lose", "losing", "grip", "gone", "slide", "sliding", "struggle", "struggling", "traffic", "no power", "cannot", "can't", "heavy", "bad", "problem", "tyre", "tire", "fail"]
+        transcript_lower = transcript.lower()
+        if any(kw in transcript_lower for kw in stress_keywords):
+            stress_score = min(95.0, stress_score + 40.0)
+            tired_score = max(0.0, tired_score - 20.0)
+
         if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
         elif tired_score > calm_score:
