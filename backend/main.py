@@ -370,7 +370,7 @@ async def predict_audio(
             generate_kwargs={
                 "language": "english", 
                 "task": "transcribe",
-                "prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
+                "initial_prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
             }
         )
         transcript = transcription_result.get("text", "").strip()
@@ -476,7 +476,7 @@ async def predict_preset(
             generate_kwargs={
                 "language": "english", 
                 "task": "transcribe",
-                "prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
+                "initial_prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
             }
         )
         transcript = transcription_result.get("text", "").strip()
