@@ -364,10 +364,11 @@ async def predict_audio(
             if os.path.exists(temp_path):
                 os.remove(temp_path)
                 
-        # Convert text prompt to prompt_ids list using the transcriber's tokenizer
+        # Convert text prompt to 1D prompt_ids tensor using the transcriber's tokenizer
         tokenizer = transcriber.tokenizer
         prompt_raw = "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
         prompt_ids = tokenizer.encode(prompt_raw, add_special_tokens=False)
+        prompt_tensor = torch.tensor(prompt_ids, dtype=torch.long)
 
         # Run Whisper ASR (force English and pass F1 racing context prompt to prevent acoustic hallucinations like "thighs")
         transcription_result = transcriber(
@@ -375,7 +376,7 @@ async def predict_audio(
             generate_kwargs={
                 "language": "english", 
                 "task": "transcribe",
-                "prompt_ids": prompt_ids
+                "prompt_ids": prompt_tensor
             }
         )
         transcript = transcription_result.get("text", "").strip()
@@ -475,10 +476,11 @@ async def predict_preset(
         # Load and preprocess audio
         y, sr = librosa.load(preset_path, sr=16000)
         
-        # Convert text prompt to prompt_ids list using the transcriber's tokenizer
+        # Convert text prompt to 1D prompt_ids tensor using the transcriber's tokenizer
         tokenizer = transcriber.tokenizer
         prompt_raw = "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
         prompt_ids = tokenizer.encode(prompt_raw, add_special_tokens=False)
+        prompt_tensor = torch.tensor(prompt_ids, dtype=torch.long)
 
         # Run Whisper ASR (force English and pass F1 racing context prompt to prevent acoustic hallucinations like "thighs")
         transcription_result = transcriber(
@@ -486,7 +488,7 @@ async def predict_preset(
             generate_kwargs={
                 "language": "english", 
                 "task": "transcribe",
-                "prompt_ids": prompt_ids
+                "prompt_ids": prompt_tensor
             }
         )
         transcript = transcription_result.get("text", "").strip()
