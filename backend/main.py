@@ -364,8 +364,15 @@ async def predict_audio(
             if os.path.exists(temp_path):
                 os.remove(temp_path)
                 
-        # Run Whisper ASR (force English transcription task to prevent language mis-detection)
-        transcription_result = transcriber(y, generate_kwargs={"language": "english", "task": "transcribe"})
+        # Run Whisper ASR (force English and pass F1 racing context prompt to prevent acoustic hallucinations like "thighs")
+        transcription_result = transcriber(
+            y, 
+            generate_kwargs={
+                "language": "english", 
+                "task": "transcribe",
+                "prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
+            }
+        )
         transcript = transcription_result.get("text", "").strip()
         
         # Run Wav2Vec2 SER
@@ -386,7 +393,7 @@ async def predict_audio(
             tired_score = 0.0
             calm_score = 100.0
             
-        if stress_score > 40:
+        if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
             final_stress = int(stress_score)
         elif tired_score > calm_score:
@@ -463,8 +470,15 @@ async def predict_preset(
         # Load and preprocess audio
         y, sr = librosa.load(preset_path, sr=16000)
         
-        # Run Whisper ASR (force English transcription task to prevent language mis-detection)
-        transcription_result = transcriber(y, generate_kwargs={"language": "english", "task": "transcribe"})
+        # Run Whisper ASR (force English and pass F1 racing context prompt to prevent acoustic hallucinations like "thighs")
+        transcription_result = transcriber(
+            y, 
+            generate_kwargs={
+                "language": "english", 
+                "task": "transcribe",
+                "prompt": "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
+            }
+        )
         transcript = transcription_result.get("text", "").strip()
         
         # Run Wav2Vec2 SER
@@ -485,7 +499,7 @@ async def predict_preset(
             tired_score = 0.0
             calm_score = 100.0
             
-        if stress_score > 40:
+        if stress_score > 30: # Lowered from 40 to optimize F1 stress detection sensitivity
             mood = "stressed"
             final_stress = int(stress_score)
         elif tired_score > calm_score:
