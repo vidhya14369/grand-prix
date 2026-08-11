@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Pause, Play, UploadCloud, Waves, Loader2, Radio, Clock } from "lucide-react"
+import { Pause, Play, UploadCloud, Waves, Loader2, Radio, Clock, Mic, MicOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { radioPresets, moodMeta, type RadioClip } from "@/lib/telemetry-data"
@@ -22,7 +22,8 @@ function useWaveform(count: number, seedBase: number) {
   }, [count, seedBase])
 }
 
-type Tab = "preset" | "upload"
+/* ── Member 4: Extended tab type to include microphone recording ── */
+type Tab = "preset" | "upload" | "record"
 
 export function AudioPlayerCard({
   clip,
@@ -40,6 +41,15 @@ export function AudioPlayerCard({
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0) // seconds
   const inputRef = useRef<HTMLInputElement>(null)
+
+  /* ── Member 4: Microphone recording state ── */
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [micError, setMicError] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<number | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   // Reseed the waveform per clip so each radio call looks distinct.
   const seedBase = useMemo(() => {
@@ -71,24 +81,119 @@ export function AudioPlayerCard({
     return () => window.clearInterval(id)
   }, [playing, duration])
 
+  /* ── Member 4: Cleanup recording on unmount ── */
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop()
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+      }
+      if (recordingTimerRef.current) {
+        window.clearInterval(recordingTimerRef.current)
+      }
+    }
+  }, [])
+
   function handleFiles(files: FileList | null) {
     const file = files?.[0]
     if (!file) return
     // Build a synthetic clip from the uploaded file for testing.
-    onSelectClip({
-      id: `custom-${file.name}`,
-      lap: 0,
-      label: "Custom",
-      timestamp: "—",
-      duration: 14,
-      fileName: file.name,
-      mood: "tired",
-      stress: 52,
-      clipTime: "00:00",
-      speaker: "Custom Upload",
-      transcript:
-        "Custom audio loaded. Run analysis to detect vocal stress and generate a transcript for this clip.",
-    }, file)
+    onSelectClip(
+      {
+        id: `custom-${file.name}`,
+        lap: 0,
+        label: "Custom",
+        timestamp: "—",
+        duration: 14,
+        fileName: file.name,
+        mood: "tired",
+        stress: 52,
+        clipTime: "00:00",
+        speaker: "Custom Upload",
+        transcript:
+          "Custom audio loaded. Run analysis to detect vocal stress and generate a transcript for this clip.",
+      },
+      file
+    )
+  }
+
+  /* ── Member 4: Start microphone recording ── */
+  async function startRecording() {
+    setMicError(null)
+    audioChunksRef.current = []
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+        const file = new File([blob], "mic-recording.webm", { type: "audio/webm" })
+
+        onSelectClip(
+          {
+            id: `custom-mic-${Date.now()}`,
+            lap: 0,
+            label: "Mic Recording",
+            timestamp: "—",
+            duration: recordingTime || 5,
+            fileName: "mic-recording.webm",
+            mood: "tired",
+            stress: 52,
+            clipTime: "00:00",
+            speaker: "Mic Input",
+            transcript:
+              "Microphone audio recorded. Run analysis to detect vocal stress.",
+          },
+          file
+        )
+
+        // Stop all tracks to release the microphone
+        stream.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+
+      recorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+
+      // Start a timer to show elapsed recording time
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingTime((t) => t + 1)
+      }, 1000)
+    } catch (err: unknown) {
+      const error = err as Error
+      if (error.name === "NotAllowedError") {
+        setMicError("Microphone access denied. Please allow microphone permission in your browser settings.")
+      } else if (error.name === "NotFoundError") {
+        setMicError("No microphone found. Please connect a microphone and try again.")
+      } else {
+        setMicError(`Microphone error: ${error.message}`)
+      }
+    }
+  }
+
+  /* ── Member 4: Stop microphone recording ── */
+  function stopRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop()
+    }
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    setIsRecording(false)
   }
 
   const pct = (progress / duration) * 100
@@ -107,17 +212,20 @@ export function AudioPlayerCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Tab toggle */}
+        {/* ── Tab toggle (Member 4: expanded to 3 columns) ── */}
         <div
-          className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-background/60 p-1"
+          className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-background/60 p-1"
           role="tablist"
           aria-label="Audio source"
         >
           <TabButton active={tab === "preset"} onClick={() => setTab("preset")} icon={Radio}>
-            Select Historical Radio
+            Historical Radio
           </TabButton>
           <TabButton active={tab === "upload"} onClick={() => setTab("upload")} icon={UploadCloud}>
-            Upload Custom File
+            Upload File
+          </TabButton>
+          <TabButton active={tab === "record"} onClick={() => setTab("record")} icon={Mic}>
+            Record Mic
           </TabButton>
         </div>
 
@@ -174,7 +282,7 @@ export function AudioPlayerCard({
               )
             })}
           </div>
-        ) : (
+        ) : tab === "upload" ? (
           <div role="tabpanel" aria-label="Custom file upload">
             <button
               type="button"
@@ -208,6 +316,45 @@ export function AudioPlayerCard({
                 onChange={(e) => handleFiles(e.target.files)}
               />
             </button>
+          </div>
+        ) : (
+          /* ── Member 4: Microphone Recording Tab Panel ── */
+          <div role="tabpanel" aria-label="Microphone recording" className="flex flex-col items-center gap-4 py-4">
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`flex size-28 flex-col items-center justify-center gap-2 rounded-full border-2 transition-all ${
+                isRecording
+                  ? "animate-pulse border-destructive bg-destructive/10 text-destructive"
+                  : "border-border bg-secondary/40 text-muted-foreground hover:border-primary hover:bg-primary/10 hover:text-primary"
+              }`}
+              aria-label={isRecording ? "Stop recording" : "Start recording"}
+            >
+              {isRecording ? (
+                <MicOff className="size-8" />
+              ) : (
+                <Mic className="size-8" />
+              )}
+              <span className="text-[10px] font-semibold uppercase tracking-wider">
+                {isRecording ? "Stop" : "Record"}
+              </span>
+            </button>
+
+            {/* Recording timer display */}
+            {isRecording && (
+              <span className="font-mono text-lg tabular-nums text-destructive">
+                {formatClock(recordingTime)}
+              </span>
+            )}
+
+            {/* Mic error message */}
+            {micError && (
+              <p className="max-w-xs text-center text-xs text-destructive">{micError}</p>
+            )}
+
+            <p className="text-center font-mono text-[11px] text-muted-foreground">
+              Record team radio via your microphone
+            </p>
           </div>
         )}
 

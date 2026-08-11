@@ -7,7 +7,8 @@ import { MoodBadgeCard } from "@/components/mood-badge-card"
 import { TranscriptCard } from "@/components/transcript-card"
 import { MetricsOverview } from "@/components/metrics-overview"
 import { LapStressChart } from "@/components/lap-stress-chart"
-import { currentAnalysis, type RadioClip, type LapData } from "@/lib/telemetry-data"
+/* ── Member 4: Added formatLapTime import for session table ── */
+import { currentAnalysis, formatLapTime, type RadioClip, type LapData } from "@/lib/telemetry-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Cpu, AlertTriangle, Sparkles } from "lucide-react"
 
@@ -126,6 +127,20 @@ export default function Page() {
         mood: clip.mood || "stressed",
         stress: clip.stress || 84
       })
+
+      /* ── Member 4: Update local chart data even when backend is offline ── */
+      if (isCustom) {
+        const nextLapNum = sessionLaps.length > 0 ? Math.max(...sessionLaps.map(l => l.lap)) + 1 : 1
+        const mockLapTime = 81.2 + Math.random() * 2.5
+        const fallbackLap: LapData = {
+          lap: nextLapNum,
+          lapTime: +mockLapTime.toFixed(3),
+          mood: clip.mood || "stressed",
+          stress: clip.stress || 84,
+        }
+        setSessionLaps(prev => [...prev, fallbackLap].sort((a, b) => a.lap - b.lap))
+      }
+
       setAnalyzed(true)
     } finally {
       setAnalyzing(false)
@@ -195,10 +210,42 @@ export default function Page() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* ── Member 4: Session History Table ── */}
+            {sessionLaps.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Race Session Log</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left font-mono text-xs">
+                      <thead>
+                        <tr className="border-b border-border text-muted-foreground">
+                          <th className="pb-2 pr-4">Lap</th>
+                          <th className="pb-2 pr-4">Lap Time</th>
+                          <th className="pb-2 pr-4">Stress</th>
+                          <th className="pb-2">Mood</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessionLaps.map((lap) => (
+                          <tr key={lap.lap} className="border-b border-border/50">
+                            <td className="py-2 pr-4 font-semibold">L{lap.lap}</td>
+                            <td className="py-2 pr-4 tabular-nums">{formatLapTime(lap.lapTime)}</td>
+                            <td className="py-2 pr-4 tabular-nums">{lap.stress}%</td>
+                            <td className="py-2 capitalize">{lap.mood}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
         </div>
       </main>
     </div>
   )
 }
-
