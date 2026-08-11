@@ -42,6 +42,8 @@ export function AudioPlayerCard({
   const [progress, setProgress] = useState(0) // seconds
   const inputRef = useRef<HTMLInputElement>(null)
   const [mounted, setMounted] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [localFile, setLocalFile] = useState<File | null>(null)
 
   /* ── Member 4: Microphone recording state ── */
   const [isRecording, setIsRecording] = useState(false)
@@ -62,25 +64,47 @@ export function AudioPlayerCard({
 
   const duration = clip.duration
 
-  // Reset transport when the loaded clip changes.
+  // Synchronize dynamic browser HTML5 Audio element
   useEffect(() => {
-    setProgress(0)
-    setPlaying(false)
-  }, [clip.id])
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
 
-  useEffect(() => {
-    if (!playing) return
-    const id = window.setInterval(() => {
-      setProgress((p) => {
-        if (p >= duration) {
-          setPlaying(false)
-          return duration
+    let audioUrl = ""
+    if (clip.id.startsWith("custom-")) {
+      if (localFile) {
+        audioUrl = URL.createObjectURL(localFile)
+      }
+    } else {
+      audioUrl = `http://localhost:8000/presets/${clip.fileName}`
+    }
+
+    if (audioUrl) {
+      const audio = new Audio(audioUrl)
+      audioRef.current = audio
+      
+      const handleTimeUpdate = () => {
+        setProgress(parseFloat(audio.currentTime.toFixed(1)))
+      }
+      
+      const handleEnded = () => {
+        setPlaying(false)
+        setProgress(0)
+      }
+
+      audio.addEventListener("timeupdate", handleTimeUpdate)
+      audio.addEventListener("ended", handleEnded)
+
+      return () => {
+        audio.pause()
+        audio.removeEventListener("timeupdate", handleTimeUpdate)
+        audio.removeEventListener("ended", handleEnded)
+        if (audioUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(audioUrl)
         }
-        return +(p + 0.1).toFixed(1)
-      })
-    }, 100)
-    return () => window.clearInterval(id)
-  }, [playing, duration])
+      }
+    }
+  }, [clip.id, localFile])
 
   /* ── Member 4: Cleanup recording on unmount & handle mount state ── */
   useEffect(() => {
@@ -101,6 +125,7 @@ export function AudioPlayerCard({
   function handleFiles(files: FileList | null) {
     const file = files?.[0]
     if (!file) return
+    setLocalFile(file)
     // Build a synthetic clip from the uploaded file for testing.
     onSelectClip(
       {
@@ -142,6 +167,7 @@ export function AudioPlayerCard({
       recorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         const file = new File([blob], "mic-recording.webm", { type: "audio/webm" })
+        setLocalFile(file)
 
         onSelectClip(
           {
@@ -397,8 +423,18 @@ export function AudioPlayerCard({
               variant="secondary"
               className="size-9 shrink-0 rounded-full"
               onClick={() => {
-                if (progress >= duration) setProgress(0)
-                setPlaying((p) => !p)
+                const audio = audioRef.current
+                if (!audio) return
+                if (playing) {
+                  audio.pause()
+                  setPlaying(false)
+                } else {
+                  if (audio.currentTime >= audio.duration) {
+                    audio.currentTime = 0
+                  }
+                  audio.play().catch(e => console.error("Playback failed:", e))
+                  setPlaying(true)
+                }
               }}
               aria-label={playing ? "Pause" : "Play"}
             >
