@@ -45,14 +45,16 @@ export function AudioPlayerCard({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [localFile, setLocalFile] = useState<File | null>(null)
 
-  /* ── Member 4: Microphone recording state ── */
+  /* ── Member 4: Microphone recording state & AudioContext refs ── */
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [micError, setMicError] = useState<string | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<number | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const leftChannelRef = useRef<Float32Array[]>([])
+  const recordingLengthRef = useRef<number>(0)
 
   // Reseed the waveform per clip so each radio call looks distinct.
   const seedBase = useMemo(() => {
@@ -110,8 +112,11 @@ export function AudioPlayerCard({
   useEffect(() => {
     setMounted(true)
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop()
+      if (processorRef.current) {
+        processorRef.current.disconnect()
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop())
@@ -149,54 +154,34 @@ export function AudioPlayerCard({
   /* ── Member 4: Start microphone recording ── */
   async function startRecording() {
     setMicError(null)
-    audioChunksRef.current = []
+    leftChannelRef.current = []
+    recordingLengthRef.current = 0
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
-      const recorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = recorder
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 })
+      audioContextRef.current = audioContext
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data)
-        }
+      const source = audioContext.createMediaStreamSource(stream)
+      
+      // Create a script processor with buffer size 4096, 1 input channel, 1 output channel
+      const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      processorRef.current = processor
+
+      processor.onaudioprocess = (e) => {
+        const left = e.inputBuffer.getChannelData(0)
+        leftChannelRef.current.push(new Float32Array(left))
+        recordingLengthRef.current += left.length
       }
 
-      recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
-        const file = new File([blob], "mic-recording.webm", { type: "audio/webm" })
-        setLocalFile(file)
+      source.connect(processor)
+      processor.connect(audioContext.destination)
 
-        onSelectClip(
-          {
-            id: `custom-mic-${Date.now()}`,
-            lap: 0,
-            label: "Mic Recording",
-            timestamp: "—",
-            duration: recordingTime || 5,
-            fileName: "mic-recording.webm",
-            mood: "tired",
-            stress: 52,
-            clipTime: "00:00",
-            speaker: "Mic Input",
-            transcript:
-              "Microphone audio recorded. Run analysis to detect vocal stress.",
-          },
-          file
-        )
-
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-      }
-
-      recorder.start()
       setIsRecording(true)
       setRecordingTime(0)
 
-      // Start a timer to show elapsed recording time
       recordingTimerRef.current = window.setInterval(() => {
         setRecordingTime((t) => t + 1)
       }, 1000)
@@ -214,14 +199,50 @@ export function AudioPlayerCard({
 
   /* ── Member 4: Stop microphone recording ── */
   function stopRecording() {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop()
-    }
     if (recordingTimerRef.current) {
       window.clearInterval(recordingTimerRef.current)
       recordingTimerRef.current = null
     }
     setIsRecording(false)
+
+    // Stop recording and process audio data
+    if (processorRef.current) {
+      processorRef.current.disconnect()
+      processorRef.current = null
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+
+    // Flatten channel data and encode to WAV (resampled directly to 16kHz mono)
+    const samples = flattenArray(leftChannelRef.current, recordingLengthRef.current)
+    const wavBuffer = encodeWAV(samples, 16000)
+    const blob = new Blob([wavBuffer], { type: "audio/wav" })
+    const file = new File([blob], "mic-recording.wav", { type: "audio/wav" })
+    setLocalFile(file)
+
+    onSelectClip(
+      {
+        id: `custom-mic-${Date.now()}`,
+        lap: 0,
+        label: "Mic Recording",
+        timestamp: "—",
+        duration: recordingTime || 3,
+        fileName: "mic-recording.wav",
+        mood: "tired",
+        stress: 52,
+        clipTime: "00:00",
+        speaker: "Mic Input",
+        transcript: "Microphone audio recorded. Run analysis to detect vocal stress.",
+      },
+      file
+    )
   }
 
   const pct = (progress / duration) * 100
@@ -505,4 +526,48 @@ function formatClock(s: number) {
   const m = Math.floor(s / 60)
   const sec = Math.floor(s % 60)
   return `${m}:${sec.toString().padStart(2, "0")}`
+}
+
+function flattenArray(channelBuffer: Float32Array[], recordingLength: number): Float32Array {
+  const result = new Float32Array(recordingLength)
+  let offset = 0
+  for (let i = 0; i < channelBuffer.length; i++) {
+    const buffer = channelBuffer[i]
+    result.set(buffer, offset)
+    offset += buffer.length
+  }
+  return result
+}
+
+function writeUTFBytes(view: DataView, offset: number, string: string): void {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i))
+  }
+}
+
+function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+
+  writeUTFBytes(view, 0, "RIFF")
+  view.setUint32(4, 36 + samples.length * 2, true)
+  writeUTFBytes(view, 8, "WAVE")
+  writeUTFBytes(view, 12, "fmt ")
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeUTFBytes(view, 36, "data")
+  view.setUint32(40, samples.length * 2, true)
+
+  let offset = 44
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+
+  return buffer
 }
