@@ -70,7 +70,37 @@ class TestBackendMember2(unittest.TestCase):
         self.assertIsInstance(data["correlation_coefficient"], float)
         self.assertIsInstance(data["average_stress"], float)
         self.assertIsInstance(data["advisory_message"], str)
-        self.assertIn("stress exceeding 60%", data["advisory_message"])
+        self.assertIn("versus Lap 4. Pit intervention recommended", data["advisory_message"])
+
+    def test_calculate_insights_custom_laps(self):
+        """Test calculate_insights function with two known laps, asserting exact stress and pace deltas."""
+        test_laps = [
+            {
+                "lap_number": 7,
+                "lap": 7,
+                "lap_time_seconds": 82.372,
+                "lapTime": 82.372,
+                "stress_score": 61.0,
+                "stress": 61.0,
+                "detected_emotion": "Tired",
+                "mood": "tired",
+                "transcript": "Checking rears"
+            },
+            {
+                "lap_number": 8,
+                "lap": 8,
+                "lap_time_seconds": 82.918,
+                "lapTime": 82.918,
+                "stress_score": 74.0,
+                "stress": 74.0,
+                "detected_emotion": "Stressed",
+                "mood": "stressed",
+                "transcript": "Tires are gone!"
+            }
+        ]
+        res = calculate_insights(test_laps)
+        expected_msg = "Stress rose from 61% to 74%; lap time worsened by 0.55s versus Lap 7. Pit intervention recommended."
+        self.assertEqual(res["advisory_message"], expected_msg)
 
     def test_static_presets_serving(self):
         """Test serving static F1 radio preset audio files."""

@@ -83,7 +83,7 @@ export const radioPresets: RadioClip[] = [
   {
     id: "lap3-t1",
     lap: 3,
-    label: "Turn 1",
+    label: "Team Radio",
     timestamp: "14:06",
     duration: 11,
     fileName: "radio_lap03_turn1.wav",
@@ -97,7 +97,7 @@ export const radioPresets: RadioClip[] = [
   {
     id: "lap7-pit",
     lap: 7,
-    label: "Pit Entry",
+    label: "Team Radio",
     timestamp: "14:15",
     duration: 13,
     fileName: "radio_lap07_pitentry.wav",
@@ -111,7 +111,7 @@ export const radioPresets: RadioClip[] = [
   {
     id: "lap9-t4",
     lap: 9,
-    label: "Turn 4",
+    label: "Team Radio",
     timestamp: "14:22",
     duration: 14,
     fileName: "radio_lap09_turn4.wav",
@@ -125,7 +125,7 @@ export const radioPresets: RadioClip[] = [
   {
     id: "lap12-back",
     lap: 12,
-    label: "Back Straight",
+    label: "Team Radio",
     timestamp: "14:31",
     duration: 10,
     fileName: "radio_lap12_backstraight.wav",

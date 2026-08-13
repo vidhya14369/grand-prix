@@ -31,12 +31,14 @@ export function AudioPlayerCard({
   onAnalyze,
   analyzing,
   nextLap,
+  analyzingStatus,
 }: {
   clip: RadioClip
   onSelectClip: (clip: RadioClip, file?: File) => void
-  onAnalyze: (customLap: number, customLapTimeStr: string) => void
+  onAnalyze: (customLap: number, customLapTimeStr: string, customLabel?: string) => void
   analyzing: boolean
   nextLap: number
+  analyzingStatus?: string
 }) {
   const [tab, setTab] = useState<Tab>("preset")
   const [dragActive, setDragActive] = useState(false)
@@ -45,15 +47,22 @@ export function AudioPlayerCard({
 
   const [inputLap, setInputLap] = useState<number>(nextLap)
   const [inputLapTime, setInputLapTime] = useState<string>("1:22.400")
+  const [inputLabel, setInputLabel] = useState<string>("Team Radio")
   const [valError, setValError] = useState<string | null>(null)
 
   useEffect(() => {
     setInputLap(nextLap)
   }, [nextLap])
 
+  useEffect(() => {
+    if (tab !== "preset") {
+      setInputLabel("Team Radio")
+    }
+  }, [tab])
+
   function handleAnalyzeClick() {
     if (tab === "preset") {
-      onAnalyze(clip.lap, "")
+      onAnalyze(clip.lap, "", clip.label)
     } else {
       const parsed = parseLapTimeToSeconds(inputLapTime)
       if (parsed === null) {
@@ -61,7 +70,7 @@ export function AudioPlayerCard({
         return
       }
       setValError(null)
-      onAnalyze(inputLap, inputLapTime)
+      onAnalyze(inputLap, inputLapTime, inputLabel.trim() || "Team Radio")
     }
   }
   const inputRef = useRef<HTMLInputElement>(null)
@@ -160,7 +169,7 @@ export function AudioPlayerCard({
       {
         id: `custom-${file.name}`,
         lap: 0,
-        label: "Custom",
+        label: "Team Radio",
         timestamp: "—",
         duration: 14,
         fileName: file.name,
@@ -255,7 +264,7 @@ export function AudioPlayerCard({
       {
         id: `custom-mic-${Date.now()}`,
         lap: 0,
-        label: "Mic Recording",
+        label: "Team Radio",
         timestamp: "—",
         duration: recordingTime || 3,
         fileName: "mic-recording.wav",
@@ -465,6 +474,16 @@ export function AudioPlayerCard({
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none"
                 />
               </div>
+              <div className="space-y-1 col-span-2">
+                <label className="block text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Radio Location / Turn</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Turn 4, Pit Entry, Back Straight"
+                  value={inputLabel}
+                  onChange={(e) => setInputLabel(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
             </div>
             {valError && (
               <p className="font-mono text-[10px] text-destructive leading-normal mt-1">{valError}</p>
@@ -477,7 +496,7 @@ export function AudioPlayerCard({
           <div className="mb-3 flex items-center justify-between">
             <span className="font-mono text-xs text-muted-foreground">{clip.fileName}</span>
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              {clip.lap ? `Lap ${clip.lap}` : "Custom"}
+              {clip.lap ? `Lap ${clip.lap} · ${clip.label}` : clip.label || "Team Radio"}
             </span>
           </div>
 
@@ -544,7 +563,7 @@ export function AudioPlayerCard({
           {analyzing ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Analyzing radio call…
+              {analyzingStatus || "Analyzing radio call…"}
             </>
           ) : (
             <>

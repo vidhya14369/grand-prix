@@ -16,7 +16,7 @@ const toneColor = {
   neutral: "var(--muted-foreground)",
 } as const
 
-export function MetricsOverview({ laps }: { laps: LapData[] }) {
+export function MetricsOverview({ laps, isDemo }: { laps: LapData[]; isDemo?: boolean }) {
   const latestLap = laps.length > 0 ? laps[laps.length - 1] : null
   const bestLap = laps.length > 0 
     ? laps.reduce((prev, curr) => (prev.lapTime < curr.lapTime ? prev : curr), laps[0]) 
@@ -80,7 +80,7 @@ export function MetricsOverview({ laps }: { laps: LapData[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Metrics Overview</CardTitle>
+        <CardTitle className="text-sm font-medium">Metrics Overview {isDemo && "(Demo Telemetry)"}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -11,10 +11,14 @@ import {
 } from "@/components/ui/select"
 import { drivers, sessions } from "@/lib/telemetry-data"
 
-export function TopNav() {
-  const [driver, setDriver] = useState("16")
-  const [session, setSession] = useState("Q3")
+interface TopNavProps {
+  driver: string
+  session: string
+  onDriverChange: (val: string) => void
+  onSessionChange: (val: string) => void
+}
 
+export function TopNav({ driver, session, onDriverChange, onSessionChange }: TopNavProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-border/80 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
@@ -39,7 +43,7 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Select value={driver} onValueChange={(val) => { if (val) setDriver(val) }}>
+          <Select value={driver} onValueChange={(val) => { if (val) onDriverChange(val) }}>
             <SelectTrigger className="w-[168px] font-mono text-sm">
               <SelectValue placeholder="Driver" />
             </SelectTrigger>
@@ -52,7 +56,7 @@ export function TopNav() {
             </SelectContent>
           </Select>
 
-          <Select value={session} onValueChange={(val) => { if (val) setSession(val) }}>
+          <Select value={session} onValueChange={(val) => { if (val) onSessionChange(val) }}>
             <SelectTrigger className="w-[128px] font-mono text-sm">
               <SelectValue placeholder="Session" />
             </SelectTrigger>

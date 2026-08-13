@@ -129,43 +129,43 @@ def calculate_insights(laps: list) -> dict:
     correlation = round(float(correlation), 2)
     avg_stress = round(float(avg_stress), 1)
 
-    # Compare average lap times when stress > 60% vs when stress < 40% (or normal)
-    high_stress_times = [l["time"] for l in normalized_laps if l["stress"] > 60.0]
-    low_stress_times = [l["time"] for l in normalized_laps if l["stress"] < 40.0]
-    normal_stress_times = [l["time"] for l in normalized_laps if l["stress"] <= 60.0]
-
-    if high_stress_times:
-        avg_high = sum(high_stress_times) / len(high_stress_times)
-        baseline_times = low_stress_times if low_stress_times else normal_stress_times
+    # Dynamic Lap-to-Lap comparison for advisory message (Task 4)
+    if n >= 2:
+        curr_lap = laps[-1]
+        prev_lap = laps[-2]
         
-        if baseline_times:
-            avg_baseline = sum(baseline_times) / len(baseline_times)
-            delta = avg_high - avg_baseline
-            if delta > 0:
-                advisory = (
-                    f"On laps with stress exceeding 60%, lap times dropped by {delta:.1f} seconds on average. "
-                    f"Pit intervention recommended."
-                )
-            else:
-                advisory = (
-                    f"High stress (>60%) detected on {len(high_stress_times)} lap(s), but pace remains steady. "
-                    f"Monitor driver radio closely."
-                )
+        curr_stress = float(curr_lap.get("stress_score", curr_lap.get("stress", 0.0)))
+        prev_stress = float(prev_lap.get("stress_score", prev_lap.get("stress", 0.0)))
+        
+        try:
+            curr_time = parse_lap_time_to_seconds(curr_lap.get("lap_time_seconds", curr_lap.get("lapTime", curr_lap.get("lap_time_str", "0.0"))))
+            prev_time = parse_lap_time_to_seconds(prev_lap.get("lap_time_seconds", prev_lap.get("lapTime", prev_lap.get("lap_time_str", "0.0"))))
+        except ValueError:
+            curr_time = 0.0
+            prev_time = 0.0
+            
+        stress_diff = curr_stress - prev_stress
+        time_diff = curr_time - prev_time
+        prev_lap_num = prev_lap.get("lap_number", prev_lap.get("lap", n - 1))
+        
+        if stress_diff >= 0:
+            stress_text = f"Stress rose from {int(prev_stress)}% to {int(curr_stress)}%"
         else:
-            advisory = (
-                f"Critical driver stress sustained (avg {avg_stress}%). "
-                f"Immediate pit stop and driver reassurance suggested."
-            )
-    elif avg_stress > 45.0:
-        advisory = (
-            f"Moderate cumulative stress detected (avg {avg_stress}%). "
-            f"Prepare pit crew for upcoming tire swap window."
-        )
+            stress_text = f"Stress decreased from {int(prev_stress)}% to {int(curr_stress)}%"
+            
+        if time_diff >= 0:
+            time_text = f"lap time worsened by {time_diff:.2f}s versus Lap {prev_lap_num}"
+        else:
+            time_text = f"lap time improved by {abs(time_diff):.2f}s versus Lap {prev_lap_num}"
+            
+        if curr_stress > 60:
+            recommendation = "Pit intervention recommended."
+        else:
+            recommendation = "Maintain current stint strategy."
+            
+        advisory = f"{stress_text}; {time_text}. {recommendation}"
     else:
-        advisory = (
-            f"Driver stress is optimal (avg {avg_stress}%). "
-            f"Pace is consistent across all logged laps. Maintain current stint strategy."
-        )
+        advisory = f"Driver stress is optimal (avg {avg_stress}%). Pace is consistent across all logged laps. Maintain current stint strategy."
 
     return {
         "correlation_coefficient": correlation,

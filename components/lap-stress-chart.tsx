@@ -53,13 +53,13 @@ function MoodDot({ cx, cy, payload }: MoodDotProps) {
 
 const legend: Mood[] = ["calm", "tired", "stressed"]
 
-export function LapStressChart({ data }: { data: LapData[] }) {
+export function LapStressChart({ data, isDemo }: { data: LapData[]; isDemo?: boolean }) {
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div>
           <CardTitle className="text-sm font-medium">
-            Lap Time vs. Driver Stress
+            Lap Time vs. Driver Stress {isDemo && "(Demo Telemetry)"}
           </CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
             Slower laps cluster with elevated vocal stress

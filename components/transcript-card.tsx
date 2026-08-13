@@ -6,11 +6,13 @@ export function TranscriptCard({
   timestamp,
   speaker,
   lap,
+  label,
 }: {
   transcript: string
   timestamp: string
   speaker: string
   lap: number
+  label?: string
 }) {
   return (
     <Card>
@@ -27,7 +29,7 @@ export function TranscriptCard({
               {speaker}
             </span>
             <span className="font-mono text-[11px] text-muted-foreground">
-              [{timestamp}] · Lap {lap}
+              [{timestamp}] · Lap {lap} {label && `· ${label}`}
             </span>
           </div>
           <p className="text-pretty text-[15px] leading-relaxed text-foreground">
@@ -35,7 +37,7 @@ export function TranscriptCard({
           </p>
         </div>
         <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-          Speech-to-text · Whisper-large-v3 · word error rate 3.2%
+          Speech-to-text · Whisper-small
         </p>
       </CardContent>
     </Card>
