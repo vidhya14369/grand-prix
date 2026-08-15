@@ -9,7 +9,7 @@ import { TranscriptCard } from "@/components/transcript-card"
 import { MetricsOverview } from "@/components/metrics-overview"
 import { LapStressChart } from "@/components/lap-stress-chart"
 /* ── Member 4: Added formatLapTime import for session table ── */
-import { currentAnalysis, formatLapTime, type RadioClip, type LapData } from "@/lib/telemetry-data"
+import { currentAnalysis, defaultEmptyClip, formatLapTime, type RadioClip, type LapData } from "@/lib/telemetry-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Cpu, AlertTriangle, Sparkles } from "lucide-react"
 
@@ -27,109 +27,77 @@ export default function Page() {
   const [analyzingStatus, setAnalyzingStatus] = useState("")
   const [isDemoData, setIsDemoData] = useState(true)
   const timersRef = useRef<NodeJS.Timeout[]>([])
-  const [stintsData, setStintsData] = useState<Record<string, LapData[]>>({})
+  type StintMemory = {
+    laps: LapData[]
+    clips: RadioClip[]
+  }
 
-  const seedMockDataForScenario = (selectedDriver: string, selectedSession: string) => {
-    let speedOffset = 0
-    let stressOffset = 0
-    
-    if (selectedDriver === "44") {
-      speedOffset = -1.2
-      stressOffset = -15
-    } else if (selectedDriver === "1") {
-      speedOffset = -2.5
-      stressOffset = -22
-    } else if (selectedDriver === "81") {
-      speedOffset = -0.5
-      stressOffset = -5
-    }
-    
-    let sessionSpeedOffset = 0
-    let sessionStressOffset = 0
-    if (selectedSession.startsWith("FP")) {
-      sessionSpeedOffset = 1.5
-      sessionStressOffset = -10
-    } else if (selectedSession.startsWith("Q")) {
-      sessionSpeedOffset = -0.8
-      sessionStressOffset = 12
-    }
-    
-    const baseLapData: LapData[] = [
-      { lap: 1, lapTime: 81.982, mood: "calm", stress: 22 },
-      { lap: 2, lapTime: 81.654, mood: "calm", stress: 18 },
-      { lap: 3, lapTime: 81.431, mood: "calm", stress: 24 },
-      { lap: 4, lapTime: 81.512, mood: "calm", stress: 31 },
-      { lap: 5, lapTime: 81.889, mood: "tired", stress: 48 },
-      { lap: 6, lapTime: 82.104, mood: "tired", stress: 55 },
-      { lap: 7, lapTime: 82.372, mood: "tired", stress: 61 },
-      { lap: 8, lapTime: 82.918, mood: "stressed", stress: 74 },
-      { lap: 9, lapTime: 83.441, mood: "stressed", stress: 84 },
-      { lap: 10, lapTime: 82.987, mood: "stressed", stress: 79 },
-      { lap: 11, lapTime: 82.233, mood: "tired", stress: 58 },
-      { lap: 12, lapTime: 81.744, mood: "calm", stress: 34 },
-      { lap: 13, lapTime: 81.588, mood: "calm", stress: 27 },
-      { lap: 14, lapTime: 81.902, mood: "tired", stress: 46 },
-    ]
-    
-    return baseLapData.map(item => {
-      const computedTime = Math.max(70.0, item.lapTime + speedOffset + sessionSpeedOffset)
-      const computedStress = Math.max(5, Math.min(99, item.stress + stressOffset + sessionStressOffset))
-      
-      let mood: Mood = "calm"
-      if (computedStress > 60) mood = "stressed"
-      else if (computedStress > 30) mood = "tired"
-      
-      return {
-        lap: item.lap,
-        lapTime: +computedTime.toFixed(3),
-        stress: computedStress,
-        mood
-      }
-    })
+  const [stintsData, setStintsData] = useState<Record<string, StintMemory>>({})
+  const [historyClips, setHistoryClips] = useState<RadioClip[]>([])
+
+  const driverNames: Record<string, string> = {
+    "16": "Charles Leclerc",
+    "44": "Lewis Hamilton",
+    "1": "Max Verstappen",
+    "81": "Oscar Piastri"
   }
 
   function handleDriverChange(newDriver: string) {
-    // Save current stint data first
+    // 1. Save current driver stint data
     const currentKey = `${driver}-${session}`
-    setStintsData(prev => ({
-      ...prev,
-      [currentKey]: sessionLaps
-    }))
+    const updatedMemory = {
+      ...stintsData,
+      [currentKey]: { laps: sessionLaps, clips: historyClips }
+    }
+    setStintsData(updatedMemory)
 
+    // 2. Switch driver
     setDriver(newDriver)
-    setIsDemoData(true)
-    
-    // Retrieve or seed new stint
+    setIsDemoData(false)
+
+    // 3. Load target driver stint data (or empty if none uploaded yet)
     const nextKey = `${newDriver}-${session}`
-    const freshData = stintsData[nextKey] || seedMockDataForScenario(newDriver, session)
-    setSessionLaps(freshData)
-    
-    const LeclercBase = "Analyzing stint pace... Run AI analysis on the driver's radio to compute performance delta."
-    const HamiltonBase = "Lewis Hamilton: Optimal tire temperature management. Low cumulative stress (avg 24%). Stint strategy is stable."
-    const VerstappenBase = "Max Verstappen: Champion's pace. Stint best 1:17.350 on Lap 3. Minimal stress levels (avg 18%). Maintain current pace."
-    const PiastriBase = "Oscar Piastri: Steady lap time progression. Moderate stress. Prepare for standard pit window options."
-    
-    if (newDriver === "44") setInsights(HamiltonBase)
-    else if (newDriver === "1") setInsights(VerstappenBase)
-    else if (newDriver === "81") setInsights(PiastriBase)
-    else setInsights(LeclercBase)
+    const targetStint = updatedMemory[nextKey] || { laps: [], clips: [] }
+    setSessionLaps(targetStint.laps)
+    setHistoryClips(targetStint.clips)
+    setClip(targetStint.clips.length > 0 ? targetStint.clips[targetStint.clips.length - 1] : defaultEmptyClip)
+
+    const name = driverNames[newDriver] || "Driver"
+    if (targetStint.laps.length > 0) {
+      const avgStress = (targetStint.laps.reduce((a, b) => a + b.stress, 0) / targetStint.laps.length).toFixed(1)
+      setInsights(`${name}: ${targetStint.laps.length} stint lap(s) logged. Average vocal stress: ${avgStress}%.`)
+    } else {
+      setInsights(`Stint telemetry initialized for ${name}. Upload team radio clips to analyze vocal stress and pace delta.`)
+    }
   }
 
   function handleSessionChange(newSession: string) {
-    // Save current stint data first
+    // 1. Save current session stint data
     const currentKey = `${driver}-${session}`
-    setStintsData(prev => ({
-      ...prev,
-      [currentKey]: sessionLaps
-    }))
+    const updatedMemory = {
+      ...stintsData,
+      [currentKey]: { laps: sessionLaps, clips: historyClips }
+    }
+    setStintsData(updatedMemory)
 
+    // 2. Switch session
     setSession(newSession)
-    setIsDemoData(true)
-    
-    // Retrieve or seed new stint
+    setIsDemoData(false)
+
+    // 3. Load target session stint data (or empty if none uploaded yet)
     const nextKey = `${driver}-${newSession}`
-    const freshData = stintsData[nextKey] || seedMockDataForScenario(driver, newSession)
-    setSessionLaps(freshData)
+    const targetStint = updatedMemory[nextKey] || { laps: [], clips: [] }
+    setSessionLaps(targetStint.laps)
+    setHistoryClips(targetStint.clips)
+    setClip(targetStint.clips.length > 0 ? targetStint.clips[targetStint.clips.length - 1] : defaultEmptyClip)
+
+    const name = driverNames[driver] || "Driver"
+    if (targetStint.laps.length > 0) {
+      const avgStress = (targetStint.laps.reduce((a, b) => a + b.stress, 0) / targetStint.laps.length).toFixed(1)
+      setInsights(`${name} [${newSession}]: ${targetStint.laps.length} stint lap(s) logged. Average vocal stress: ${avgStress}%.`)
+    } else {
+      setInsights(`Session switched to ${newSession} for ${name}. Upload team radio clips to analyze stint telemetry.`)
+    }
   }
 
   function clearStatusTimers() {
@@ -151,6 +119,22 @@ export default function Page() {
       if (res.ok) {
         const data = await res.json()
         setSessionLaps(data)
+        
+        const mappedClips: RadioClip[] = data.map((item: any) => ({
+          id: `session-${item.lap_number || item.lap}`,
+          lap: item.lap_number || item.lap,
+          label: item.speaker || "Team Radio",
+          timestamp: "Logged",
+          duration: 14,
+          fileName: `radio_lap${item.lap_number || item.lap}.wav`,
+          mood: item.mood || "calm",
+          stress: item.stress || 0,
+          clipTime: "00:00",
+          speaker: item.speaker || "Driver Radio",
+          transcript: item.transcript || "[Radio Clip]"
+        }))
+        setHistoryClips(mappedClips)
+
         setStintsData(prev => ({
           ...prev,
           [`${driver}-${session}`]: data
@@ -171,26 +155,28 @@ export default function Page() {
         console.warn("Insights endpoint failed, keeping AI status active:", insightsErr)
       }
     } catch (e) {
-      console.warn("FastAPI backend offline, loading local static telemetry mock data...")
+      console.warn("FastAPI backend offline, reset telemetry state...")
       setIsFallbackMode(true)
       setIsDemoData(true)
-      const { lapData } = await import("@/lib/telemetry-data")
-      setSessionLaps(lapData)
-      setStintsData(prev => ({
-        ...prev,
-        [`${driver}-${session}`]: lapData
-      }))
-      setInsights("Driver vocal stress exceeded 70% during Lap 9. Coincided with a +2.1s pace drop. Recommend tire change (Slicks to Intermediates).")
+      setSessionLaps([])
+      setHistoryClips([])
+      setInsights("Driver vocal stress monitor online. Upload team radio clips to generate live AI insights.")
     }
   }
 
   function handleSelectClip(next: RadioClip, file?: File) {
-    setClip(next)
-    setUploadedFile(file)
-    setAnalyzed(false) // Wait for user to trigger explicit analysis
+    setClip({
+      ...next,
+      file: file || next.file
+    })
+    if (file) {
+      setUploadedFile(file)
+    }
+    setAnalyzed(true)
   }
 
   async function handleAnalyze(customLapNum: number, customLapTimeStr: string, customLabel?: string) {
+    const isCustom = true
     setAnalyzing(true)
     clearStatusTimers()
     setAnalyzingStatus("1/3 Upload accepted, transcribing speech...")
@@ -205,87 +191,55 @@ export default function Page() {
     
     timersRef.current = [t1, t2]
     
-    // Determine if it's a custom upload or preset
-    const isCustom = clip.id.startsWith("custom-")
-    
     try {
       let resultData;
       
-      if (isCustom) {
-        // Prepare multipart form data for file upload
-        const formData = new FormData()
-        if (uploadedFile) {
-          formData.append("file", uploadedFile)
-        }
-        
-        const parsedSeconds = parseTimeToSeconds(customLapTimeStr) || 82.4
-        formData.append("lap", customLapNum.toString())
-        formData.append("lapTime", parsedSeconds.toString())
-        
-        const res = await fetch("http://localhost:8000/api/predict", {
-          method: "POST",
-          body: formData,
-        })
-        
-        if (!res.ok) throw new Error("Backend failed processing file")
-        resultData = await res.json()
-        setIsFallbackMode(false)
-
-        // Explicitly save the custom lap to the backend session log database
-        try {
-          await fetch("http://localhost:8000/api/session/add", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              lap: resultData.lap,
-              lapTime: resultData.lapTime,
-              mood: resultData.mood,
-              stress: resultData.stress,
-              transcript: resultData.transcript,
-              speaker: resultData.speaker || "Driver Radio"
-            })
-          })
-        } catch (saveErr) {
-          console.warn("Manual save call to /api/session/add failed:", saveErr)
-        }
-      } else {
-        // Preset file execution (passes IDs only to trigger local backend file processing)
-        const formData = new FormData()
-        formData.append("preset_id", clip.id)
-        formData.append("filename", clip.fileName)
-        formData.append("lap", clip.lap.toString())
-        
-        // Find existing preset lapTime or assign default
-        const { lapData } = await import("@/lib/telemetry-data")
-        const presetLap = lapData.find(l => l.lap === clip.lap)
-        const lapTime = presetLap ? presetLap.lapTime : 82.0
-        formData.append("lapTime", lapTime.toString())
-        
-        const res = await fetch("http://localhost:8000/api/predict/preset", {
-          method: "POST",
-          body: formData,
-        })
-        
-        if (!res.ok) throw new Error("Backend failed processing preset")
-        resultData = await res.json()
-        setIsFallbackMode(false)
+      // Prepare multipart form data for file upload
+      const formData = new FormData()
+      if (uploadedFile) {
+        formData.append("file", uploadedFile)
       }
+      
+      const parsedSeconds = parseTimeToSeconds(customLapTimeStr) || 82.4
+      formData.append("lap", customLapNum.toString())
+      formData.append("lapTime", parsedSeconds.toString())
+      formData.append("speaker", customLabel || "Driver Radio")
+      
+      const res = await fetch("http://localhost:8000/api/predict", {
+        method: "POST",
+        body: formData,
+      })
+      
+      if (!res.ok) throw new Error("Backend failed processing file")
+      resultData = await res.json()
+      setIsFallbackMode(false)
       
       // Clear status timers immediately upon successful prediction response
       clearStatusTimers()
       setAnalyzingStatus("3/3 Updating telemetry metrics...")
       
-      // Update clip UI view
-      setClip({
-        ...clip,
+      const newHistoryClip: RadioClip = {
+        id: `upload-lap${resultData.lap}-${Date.now()}`,
+        lap: resultData.lap,
+        label: customLabel || "Team Radio",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        duration: 14,
+        fileName: uploadedFile?.name || `radio_lap${resultData.lap}.wav`,
         mood: resultData.mood,
         stress: resultData.stress,
         transcript: resultData.transcript,
-        lap: resultData.lap,
-        label: customLabel || clip.label || "Team Radio"
+        clipTime: "00:00",
+        speaker: resultData.speaker || customLabel || "Driver Radio",
+        file: uploadedFile
+      }
+
+      setHistoryClips(prev => {
+        const filtered = prev.filter(c => c.lap !== newHistoryClip.lap)
+        return [...filtered, newHistoryClip].sort((a, b) => a.lap - b.lap)
       })
+
+      // Update clip UI view
+      setClip(newHistoryClip)
       
       // Refresh session logs and insights
       await fetchSessionData()
@@ -333,6 +287,19 @@ export default function Page() {
     }
   }
 
+  async function handleClearSession() {
+    try {
+      await fetch("http://localhost:8000/api/session/reset", { method: "DELETE" })
+    } catch (e) {
+      console.warn("Failed to clear session on backend:", e)
+    }
+    setStintsData({})
+    setSessionLaps([])
+    setHistoryClips([])
+    setClip(defaultEmptyClip)
+    setInsights("Session history cleared. Upload new radio clips to log stint telemetry.")
+  }
+
   return (
     <div className="min-h-screen">
       <TopNav 
@@ -374,6 +341,7 @@ export default function Page() {
               analyzing={analyzing}
               nextLap={sessionLaps.length > 0 ? Math.max(...sessionLaps.map(l => l.lap)) + 1 : 1}
               analyzingStatus={analyzingStatus}
+              historyClips={historyClips}
             />
             <MoodBadgeCard
               mood={analyzed ? clip.mood : "calm"}
@@ -412,20 +380,36 @@ export default function Page() {
             <MetricsOverview laps={sessionLaps} isDemo={isDemoData} />
             <LapStressChart data={sessionLaps} isDemo={isDemoData} />
 
-            {/* ── Member 4: Session History Table ── */}
-            {sessionLaps.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Race Session Log {isDemoData && "(Demo Telemetry)"}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
+            {/* ── Member 4: Historical Audio & Stint Log Table ── */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-medium">Historical Audio &amp; Stint Log</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Uploaded team radio audio clips and telemetry</p>
+                </div>
+                {sessionLaps.length > 0 && (
+                  <button 
+                    onClick={handleClearSession}
+                    className="font-mono text-xs text-rose-400 hover:text-rose-300 transition-colors border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 rounded"
+                  >
+                    Clear History
+                  </button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {sessionLaps.length === 0 ? (
+                  <div className="py-8 text-center font-mono text-xs text-muted-foreground">
+                    No historical audio uploaded yet. Upload a team radio clip above to log stint telemetry.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-[280px] overflow-y-auto pr-1">
                     <table className="w-full text-left font-mono text-xs">
                       <thead>
                         <tr className="border-b border-border text-muted-foreground">
                           <th className="pb-2 pr-4">Lap</th>
+                          <th className="pb-2 pr-4">Radio Name / Speaker</th>
                           <th className="pb-2 pr-4">Lap Time</th>
-                          <th className="pb-2 pr-4">Stress</th>
+                          <th className="pb-2 pr-4">Stress Level</th>
                           <th className="pb-2">Mood</th>
                         </tr>
                       </thead>
@@ -433,17 +417,18 @@ export default function Page() {
                         {sessionLaps.map((lap) => (
                           <tr key={lap.lap} className="border-b border-border/50">
                             <td className="py-2 pr-4 font-semibold">L{lap.lap}</td>
+                            <td className="py-2 pr-4 text-primary font-medium">{lap.speaker || "Driver Radio"}</td>
                             <td className="py-2 pr-4 tabular-nums">{formatLapTime(lap.lapTime)}</td>
-                            <td className="py-2 pr-4 tabular-nums">{lap.stress}%</td>
+                            <td className="py-2 pr-4 tabular-nums font-semibold">{lap.stress}%</td>
                             <td className="py-2 capitalize">{lap.mood}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                )}
+              </CardContent>
+            </Card>
           </section>
         </div>
       </main>

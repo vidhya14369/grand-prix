@@ -91,20 +91,47 @@ def load_models():
     global transcriber, emotion_classifier
     if transcriber is None or emotion_classifier is None:
         try:
-            from transformers import pipeline
-            print("Loading Whisper model from Hugging Face...")
-            transcriber = pipeline(
-                "automatic-speech-recognition",
-                model="openai/whisper-small",
-                device="cpu"
-            )
-            print("Loading Wav2Vec2 emotion classifier model...")
+            import os, torch
+            import transformers.modeling_utils as modeling_utils
+            modeling_utils.check_torch_load_is_safe = lambda: None
+            
+            from transformers import pipeline, WhisperForConditionalGeneration, WhisperProcessor
+            from peft import PeftModel, PeftConfig
+            
+            device = 0 if torch.cuda.is_available() else "cpu"
+            device_name = f"GPU ({torch.cuda.get_device_name(0)})" if torch.cuda.is_available() else "CPU"
+            
+            whisper_model_path = os.path.join(os.path.dirname(__file__), "models", "whisper-f1")
+            if os.path.exists(whisper_model_path):
+                print(f"Loading Fine-Tuned Whisper-F1 (LoRA) model on {device_name}...")
+                peft_config = PeftConfig.from_pretrained(whisper_model_path)
+                base_model = WhisperForConditionalGeneration.from_pretrained(peft_config.base_model_name_or_path).to(device)
+                lora_model = PeftModel.from_pretrained(base_model, whisper_model_path)
+                merged_model = lora_model.merge_and_unload().to(device)
+                processor = WhisperProcessor.from_pretrained(peft_config.base_model_name_or_path, language="english", task="transcribe")
+                transcriber = pipeline(
+                    "automatic-speech-recognition",
+                    model=merged_model,
+                    tokenizer=processor.tokenizer,
+                    feature_extractor=processor.feature_extractor,
+                    device=device
+                )
+                print(f"Fine-Tuned Whisper-F1 model loaded successfully on {device_name}!")
+            else:
+                print(f"Loading base Whisper Medium model on {device_name}...")
+                transcriber = pipeline(
+                    "automatic-speech-recognition",
+                    model="openai/whisper-medium",
+                    device=device
+                )
+
+            print(f"Loading Wav2Vec2 emotion classifier model on {device_name}...")
             emotion_classifier = pipeline(
                 "audio-classification",
                 model="superb/wav2vec2-base-superb-er",
-                device="cpu"
+                device=device
             )
-            print("All models loaded successfully on CPU!")
+            print(f"All models loaded successfully on {device_name}!")
         except Exception as e:
             print(f"Warning: Transformers model load skipped ({str(e)}). Using fallback metadata processing.")
 
@@ -144,54 +171,7 @@ def root():
 @app.get("/api/session", tags=["Session"])
 def get_session():
     """Retrieve all logged laps from the session database"""
-    laps = read_session_db()
-    if not laps:
-        # Seed default historical laps if DB is empty
-        initial_data = [
-            {
-                "lap_number": 1,
-                "lap_time_str": "1:21.400",
-                "lap_time_seconds": 81.400,
-                "transcript": "Car feels great, balanced nicely through Sector 2.",
-                "stress_score": 12.5,
-                "detected_emotion": "Calm"
-            },
-            {
-                "lap_number": 2,
-                "lap_time_str": "1:21.650",
-                "lap_time_seconds": 81.650,
-                "transcript": "Tires are warming up, overall good pace.",
-                "stress_score": 18.0,
-                "detected_emotion": "Calm"
-            },
-            {
-                "lap_number": 3,
-                "lap_time_str": "1:22.100",
-                "lap_time_seconds": 82.100,
-                "transcript": "Slight understeer in Turn 4, losing some rear grip.",
-                "stress_score": 45.0,
-                "detected_emotion": "Tired"
-            },
-            {
-                "lap_number": 4,
-                "lap_time_str": "1:23.250",
-                "lap_time_seconds": 83.250,
-                "transcript": "Rears are starting to slide heavily, struggling on exit!",
-                "stress_score": 68.5,
-                "detected_emotion": "Stressed"
-            },
-            {
-                "lap_number": 5,
-                "lap_time_str": "1:24.100",
-                "lap_time_seconds": 84.100,
-                "transcript": "Traffic ahead and zero grip! Box this lap?",
-                "stress_score": 85.0,
-                "detected_emotion": "Stressed"
-            }
-        ]
-        write_session_db(initial_data)
-        return initial_data
-    return laps
+    return read_session_db()
 
 
 @app.post("/api/session/add", status_code=status.HTTP_201_CREATED, tags=["Session"])
@@ -262,83 +242,17 @@ def get_insights():
 
 @app.delete("/api/session/reset", tags=["Session"])
 def reset_session():
-    """Reset database to initial demo state."""
-    initial_data = [
-        {
-            "lap_number": 1,
-            "lap": 1,
-            "lap_time_str": "1:21.400",
-            "lap_time_seconds": 81.400,
-            "lapTime": 81.400,
-            "transcript": "Car feels great, balanced nicely through Sector 2.",
-            "stress_score": 12.5,
-            "stress": 12.5,
-            "detected_emotion": "Calm",
-            "mood": "calm",
-            "speaker": "Driver Radio"
-        },
-        {
-            "lap_number": 2,
-            "lap": 2,
-            "lap_time_str": "1:21.650",
-            "lap_time_seconds": 81.650,
-            "lapTime": 81.650,
-            "transcript": "Tires are warming up, overall good pace.",
-            "stress_score": 18.0,
-            "stress": 18.0,
-            "detected_emotion": "Calm",
-            "mood": "calm",
-            "speaker": "Driver Radio"
-        },
-        {
-            "lap_number": 3,
-            "lap": 3,
-            "lap_time_str": "1:22.100",
-            "lap_time_seconds": 82.100,
-            "lapTime": 82.100,
-            "transcript": "Slight understeer in Turn 4, losing some rear grip.",
-            "stress_score": 45.0,
-            "stress": 45.0,
-            "detected_emotion": "Tired",
-            "mood": "tired",
-            "speaker": "Driver Radio"
-        },
-        {
-            "lap_number": 4,
-            "lap": 4,
-            "lap_time_str": "1:23.250",
-            "lap_time_seconds": 83.250,
-            "lapTime": 83.250,
-            "transcript": "Rears are starting to slide heavily, struggling on exit!",
-            "stress_score": 68.5,
-            "stress": 68.5,
-            "detected_emotion": "Stressed",
-            "mood": "stressed",
-            "speaker": "Driver Radio"
-        },
-        {
-            "lap_number": 5,
-            "lap": 5,
-            "lap_time_str": "1:24.100",
-            "lap_time_seconds": 84.100,
-            "lapTime": 84.100,
-            "transcript": "Traffic ahead and zero grip! Box this lap?",
-            "stress_score": 85.0,
-            "stress": 85.0,
-            "detected_emotion": "Stressed",
-            "mood": "stressed",
-            "speaker": "Driver Radio"
-        }
-    ]
-    write_session_db(initial_data)
-    return {"message": "Session database reset successfully.", "lap_count": len(initial_data)}
+    """Clear all historical logged laps from the database."""
+    write_session_db([])
+    return {"message": "Session database cleared successfully.", "lap_count": 0}
 
 
 @app.post("/api/predict", tags=["AI Prediction"])
 async def predict_audio(
     file: UploadFile = File(...),
     lap: Optional[int] = Form(None),
-    lapTime: Optional[float] = Form(None)
+    lapTime: Optional[float] = Form(None),
+    speaker: Optional[str] = Form("Driver Radio")
 ):
     """
     Accept an uploaded audio file, transcribe it using Whisper,
@@ -382,7 +296,7 @@ async def predict_audio(
             tokenizer = transcriber.tokenizer
             prompt_raw = "Formula 1 race team radio communication. Tires, box, pit wall, understeer, oversteer, delta, lap time, Brennan."
             prompt_ids = tokenizer.encode(prompt_raw, add_special_tokens=False)
-            prompt_tensor = torch.tensor(prompt_ids, dtype=torch.long)
+            prompt_tensor = torch.tensor(prompt_ids, dtype=torch.long, device=transcriber.device)
 
             # Run Whisper ASR (force English and pass F1 racing context prompt to prevent acoustic hallucinations like "thighs")
             transcription_result = transcriber(
@@ -442,18 +356,20 @@ async def predict_audio(
                 final_stress = preset["stress"]
                 transcript = preset["transcript"]
             
+        spk_name = speaker.strip() if speaker and speaker.strip() else "Driver Radio"
+        db = read_session_db()
+        lap_num = lap or (len(db) + 1)
+        
         result = {
-            "lap": lap or 1,
+            "lap": lap_num,
             "lapTime": lapTime or 81.4,
             "mood": mood,
             "stress": final_stress,
             "transcript": transcript if transcript else "[Radio Static / Unintelligible]",
-            "speaker": "Driver Radio"
+            "speaker": spk_name
         }
         
         # Automatically add this lap to our session database
-        db = read_session_db()
-        lap_num = lap or (len(db) + 1)
         lap_entry = {
             "lap_number": lap_num,
             "lap": lap_num,
@@ -465,7 +381,7 @@ async def predict_audio(
             "stress": float(final_stress),
             "detected_emotion": mood.capitalize(),
             "mood": mood,
-            "speaker": "Driver Radio"
+            "speaker": spk_name
         }
         db = [item for item in db if item.get("lap_number", item.get("lap")) != lap_num]
         db.append(lap_entry)

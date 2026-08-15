@@ -21,6 +21,8 @@ env/
 # Database & Local Logs
 backend/session_db.json
 *.log
+backend/models/*/checkpoint-*/
+*.wav
 
 # OS-specific
 .DS_Store

@@ -32,6 +32,7 @@ export function AudioPlayerCard({
   analyzing,
   nextLap,
   analyzingStatus,
+  historyClips = [],
 }: {
   clip: RadioClip
   onSelectClip: (clip: RadioClip, file?: File) => void
@@ -39,6 +40,7 @@ export function AudioPlayerCard({
   analyzing: boolean
   nextLap: number
   analyzingStatus?: string
+  historyClips?: RadioClip[]
 }) {
   const [tab, setTab] = useState<Tab>("preset")
   const [dragActive, setDragActive] = useState(false)
@@ -106,10 +108,12 @@ export function AudioPlayerCard({
     }
 
     let audioUrl = ""
-    if (clip.id.startsWith("custom-")) {
-      if (localFile) {
-        audioUrl = URL.createObjectURL(localFile)
-      }
+    if (clip.file) {
+      audioUrl = URL.createObjectURL(clip.file)
+    } else if (localFile) {
+      audioUrl = URL.createObjectURL(localFile)
+    } else if (clip.id.startsWith("custom-")) {
+      audioUrl = ""
     } else {
       audioUrl = `http://localhost:8000/presets/${clip.fileName}`
     }
@@ -139,7 +143,7 @@ export function AudioPlayerCard({
         }
       }
     }
-  }, [clip.id, localFile])
+  }, [clip.id, clip.fileName, localFile])
 
   /* ── Member 4: Cleanup recording on unmount & handle mount state ── */
   useEffect(() => {
@@ -168,17 +172,18 @@ export function AudioPlayerCard({
     onSelectClip(
       {
         id: `custom-${file.name}`,
-        lap: 0,
+        lap: nextLap,
         label: "Team Radio",
-        timestamp: "—",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         duration: 14,
         fileName: file.name,
-        mood: "tired",
-        stress: 52,
+        mood: "calm",
+        stress: 0,
         clipTime: "00:00",
-        speaker: "Custom Upload",
+        speaker: "Driver Radio",
         transcript:
           "Custom audio loaded. Run analysis to detect vocal stress and generate a transcript for this clip.",
+        file: file
       },
       file
     )
@@ -253,28 +258,30 @@ export function AudioPlayerCard({
       streamRef.current = null
     }
 
-    // Flatten channel data and encode to WAV (resampled directly to 16kHz mono)
+    // Convert recorded PCM float32 buffers to valid WAV blob
     const samples = flattenArray(leftChannelRef.current, recordingLengthRef.current)
     const wavBuffer = encodeWAV(samples, 16000)
-    const blob = new Blob([wavBuffer], { type: "audio/wav" })
-    const file = new File([blob], "mic-recording.wav", { type: "audio/wav" })
-    setLocalFile(file)
+    const wavBlob = new Blob([wavBuffer], { type: "audio/wav" })
+    const recordedFile = new File([wavBlob], `mic_record_lap${nextLap}.wav`, { type: "audio/wav" })
+    
+    setLocalFile(recordedFile)
 
     onSelectClip(
       {
         id: `custom-mic-${Date.now()}`,
-        lap: 0,
-        label: "Team Radio",
-        timestamp: "—",
-        duration: recordingTime || 3,
-        fileName: "mic-recording.wav",
-        mood: "tired",
-        stress: 52,
+        lap: nextLap,
+        label: "Microphone Input",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        duration: Math.max(1, recordingTime),
+        fileName: recordedFile.name,
+        mood: "calm",
+        stress: 0,
         clipTime: "00:00",
-        speaker: "Mic Input",
-        transcript: "Microphone audio recorded. Run analysis to detect vocal stress.",
+        speaker: "Driver Radio",
+        transcript: "Microphone recording captured. Click 'Run AI Telemetry Analysis' to transcribe and assess stress.",
+        file: recordedFile
       },
-      file
+      recordedFile
     )
   }
 
@@ -282,21 +289,22 @@ export function AudioPlayerCard({
   const activeBar = Math.floor((progress / duration) * bars.length)
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <Waves className="size-4 text-primary" aria-hidden="true" />
-          Audio Input &amp; Player
-        </CardTitle>
-        <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          .wav / .mp3
-        </span>
+    <Card className="overflow-hidden border-border bg-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <Radio className="size-4 text-primary" />
+            Audio Input &amp; Player
+          </CardTitle>
+          <span className="rounded bg-secondary px-2 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+            .WAV / .MP3
+          </span>
+        </div>
       </CardHeader>
-
       <CardContent className="space-y-4">
-        {/* ── Tab toggle (Member 4: expanded to 3 columns) ── */}
+        {/* Source tab switcher */}
         <div
-          className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-background/60 p-1"
+          className="grid grid-cols-3 gap-1 rounded-lg bg-secondary/50 p-1"
           role="tablist"
           aria-label="Audio source"
         >
@@ -313,56 +321,68 @@ export function AudioPlayerCard({
 
         {/* Tab content */}
         {tab === "preset" ? (
-          <div className="space-y-2" role="tabpanel" aria-label="Historical radio clips">
-            {radioPresets.map((preset) => {
-              const selected = preset.id === clip.id
-              const meta = moodMeta[preset.mood]
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => onSelectClip(preset)}
-                  aria-pressed={selected}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                    selected
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-secondary/40 hover:border-primary/50 hover:bg-secondary/70"
-                  }`}
-                >
-                  <span
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-semibold ${
-                      selected ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+          <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1" role="tabpanel" aria-label="Historical radio clips">
+            {historyClips.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/80 p-6 text-center">
+                <Radio className="mx-auto size-6 text-muted-foreground/60 mb-2" />
+                <p className="text-xs font-mono text-muted-foreground">
+                  No historical radio clips uploaded yet.
+                </p>
+                <p className="text-[11px] font-mono text-muted-foreground/70 mt-1">
+                  Use <span className="text-primary font-semibold">&quot;Upload File&quot;</span> or <span className="text-primary font-semibold">&quot;Record Mic&quot;</span> above to analyze your first clip.
+                </p>
+              </div>
+            ) : (
+              historyClips.map((preset) => {
+                const selected = preset.id === clip.id || preset.lap === clip.lap
+                const meta = moodMeta[preset.mood]
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => onSelectClip(preset, preset.file)}
+                    aria-pressed={selected}
+                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      selected
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-secondary/40 hover:border-primary/50 hover:bg-secondary/70"
                     }`}
                   >
-                    L{preset.lap}
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      Lap {preset.lap} &middot; {preset.label}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                      <Clock className="size-3" aria-hidden="true" />
-                      {preset.timestamp}
-                    </span>
-                  </span>
-
-                  {/* Driver state preview badge — shown once selected/loaded */}
-                  {selected && (
                     <span
-                      className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
-                      style={{
-                        color: meta.color,
-                        backgroundColor: `color-mix(in oklch, ${meta.color} 18%, transparent)`,
-                      }}
+                      className={`flex size-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-semibold ${
+                        selected ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                      }`}
                     >
-                      <span className="size-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
-                      {meta.label}
+                      L{preset.lap}
                     </span>
-                  )}
-                </button>
-              )
-            })}
+
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        Lap {preset.lap} &middot; {preset.speaker || preset.label}
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                        <Clock className="size-3" aria-hidden="true" />
+                        {preset.timestamp}
+                      </span>
+                    </span>
+
+                    {/* Driver state preview badge */}
+                    {selected && meta && (
+                      <span
+                        className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                        style={{
+                          color: meta.color,
+                          backgroundColor: `color-mix(in oklch, ${meta.color} 18%, transparent)`,
+                        }}
+                      >
+                        <span className="size-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
+                        {meta.label}
+                      </span>
+                    )}
+                  </button>
+                )
+              })
+            )}
           </div>
         ) : tab === "upload" ? (
           <div role="tabpanel" aria-label="Custom file upload">

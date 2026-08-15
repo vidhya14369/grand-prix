@@ -1,6 +1,7 @@
 import { MessageSquareText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+// Live Audio Transcript Card Component
 export function TranscriptCard({
   transcript,
   timestamp,
@@ -36,9 +37,6 @@ export function TranscriptCard({
             &ldquo;{transcript}&rdquo;
           </p>
         </div>
-        <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-          Speech-to-text · Whisper-small
-        </p>
       </CardContent>
     </Card>
   )

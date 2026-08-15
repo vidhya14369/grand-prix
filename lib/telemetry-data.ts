@@ -76,67 +76,25 @@ export type RadioClip = {
   transcript: string
   clipTime: string // position within the stint clip, e.g. "00:14"
   speaker: string
+  file?: File
 }
 
-// Preset historical radio clips captured during the stint.
-export const radioPresets: RadioClip[] = [
-  {
-    id: "lap3-t1",
-    lap: 3,
-    label: "Team Radio",
-    timestamp: "14:06",
-    duration: 11,
-    fileName: "radio_lap03_turn1.wav",
-    mood: "calm",
-    stress: 24,
-    clipTime: "00:09",
-    speaker: "Driver Radio",
-    transcript:
-      "Car feels good, balance is where I want it. Happy to keep pushing at this pace, no complaints.",
-  },
-  {
-    id: "lap7-pit",
-    lap: 7,
-    label: "Team Radio",
-    timestamp: "14:15",
-    duration: 13,
-    fileName: "radio_lap07_pitentry.wav",
-    mood: "tired",
-    stress: 61,
-    clipTime: "00:11",
-    speaker: "Driver Radio",
-    transcript:
-      "Starting to feel the rears go, legs are getting heavy. How many laps left on this set? Give me a target.",
-  },
-  {
-    id: "lap9-t4",
-    lap: 9,
-    label: "Team Radio",
-    timestamp: "14:22",
-    duration: 14,
-    fileName: "radio_lap09_turn4.wav",
-    mood: "stressed",
-    stress: 84,
-    clipTime: "00:14",
-    speaker: "Driver Radio",
-    transcript:
-      "Tires are going, I'm losing grip in turn 4! We need to think about strategy, I can't hold this pace much longer.",
-  },
-  {
-    id: "lap12-back",
-    lap: 12,
-    label: "Team Radio",
-    timestamp: "14:31",
-    duration: 10,
-    fileName: "radio_lap12_backstraight.wav",
-    mood: "calm",
-    stress: 34,
-    clipTime: "00:08",
-    speaker: "Driver Radio",
-    transcript:
-      "Okay, fresh tires are switched on now. Feeling much better, let's go get them. Full send.",
-  },
-]
+// Historical user uploaded radio clips list starts empty
+export const radioPresets: RadioClip[] = []
 
-// Default analyzed radio call (Lap 9 — the stressed peak).
-export const currentAnalysis = radioPresets[2]
+// Default initial empty clip view
+export const defaultEmptyClip: RadioClip = {
+  id: "initial-empty",
+  lap: 1,
+  label: "Team Radio",
+  timestamp: "—",
+  duration: 10,
+  fileName: "upload_audio.wav",
+  mood: "calm",
+  stress: 0,
+  clipTime: "00:00",
+  speaker: "Driver Radio",
+  transcript: "No audio uploaded yet. Upload a team radio clip or record mic to begin AI speech & vocal stress analysis."
+}
+
+export const currentAnalysis = defaultEmptyClip
